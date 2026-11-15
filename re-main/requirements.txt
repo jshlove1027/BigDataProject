@@ -1,0 +1,9 @@
+pandas
+numpy
+plotly
+folium
+openai
+
+# [수업 외] 웹사이트용
+streamlit
+streamlit-folium
