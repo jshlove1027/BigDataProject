@@ -99,7 +99,7 @@ def load_pop(path, col=None):
         if sido == "세종" and len(tok) == 1:
             rows.append((sido, "세종시", val))
         elif len(tok) == 2 and not re.match(r"^.+?시.+구$", tok[1]):   # 시도 합계·시 아래 구 행은 제외
-            rows.append((sido, tok[1], val))
+            rows.append((sido, ALIAS.get((sido, tok[1]), tok[1]), val))
     return pd.DataFrame(rows, columns=["sido", "sigungu", "population"])
 
 
@@ -189,8 +189,8 @@ def draw(feats, title, label, out_png, annotate=False):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--crime", default="data/crime.csv")
-    ap.add_argument("--geo", required=True, help="시군구 경계 GeoJSON")
-    ap.add_argument("--pop", help="시군구별 주민등록 인구 CSV (없으면 발생 건수 지도)")
+    ap.add_argument("--geo", default="data/sigungu.geojson", help="시군구 경계 GeoJSON")
+    ap.add_argument("--pop", default="data/population.csv",help="시군구별 주민등록 인구 CSV (없으면 발생 건수 지도)")
     ap.add_argument("--pop-col")
     ap.add_argument("--types", nargs="+", default=["전체", "강력범죄", "폭력범죄", "절도범죄", "지능범죄"])
     ap.add_argument("--out", default="out")
