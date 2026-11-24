@@ -43,11 +43,26 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 #   함수 위에 붙이는 '데코레이터'. 처음 한 번만 함수를 실행하고 결과를 기억해 둔다.
 #   streamlit 은 버튼을 누를 때마다 코드 전체를 처음부터 다시 실행하기 때문에,
 #   이것을 붙이지 않으면 클릭할 때마다 CSV 를 다시 읽어서 사이트가 느려진다.
+# [수업 외] data 폴더 안의 '경찰청_범죄 발생 지역별 통계_YYYY1231.csv' 파일들을 찾아 연도 목록을 만든다.
+#   os.listdir(폴더) : 폴더 안의 파일 이름 목록
+#   파일 이름 끝이 '20251231.csv' 이면 앞 4글자(2025)가 연도. 새 연도 CSV 를 넣으면 자동으로 선택지에 추가된다.
+CRIME_PREFIX = '경찰청_범죄 발생 지역별 통계_'
+
+
+def crime_years():
+    years = []
+    for name in os.listdir(DATA_DIR):
+        if name.startswith(CRIME_PREFIX) and name.endswith('1231.csv'):
+            years.append(int(name[len(CRIME_PREFIX):len(CRIME_PREFIX) + 4]))
+    return sorted(years, reverse=True)   # 최신 연도가 맨 앞
+
+
 @st.cache_data
-def load_crime():
+def load_crime(year=2025):
     # [수업 4장] pd.read_csv
     #   경찰청 파일은 윈도우 한글 형식(cp949)으로 저장되어 있어 encoding 을 지정한다.
-    crime = pd.read_csv(os.path.join(DATA_DIR, '경찰청_범죄 발생 지역별 통계_20251231.csv'), encoding='cp949')
+    #   장소별 통계는 2025년 파일만 있어서 연도와 상관없이 2025년을 쓴다.
+    crime = pd.read_csv(os.path.join(DATA_DIR, f'{CRIME_PREFIX}{year}1231.csv'), encoding='cp949')
     place = pd.read_csv(os.path.join(DATA_DIR, '경찰청_범죄 발생 장소별 통계_20251231.csv'), encoding='cp949')
     return crime, place
 
@@ -55,6 +70,12 @@ def load_crime():
 @st.cache_data
 def load_supports():
     return pd.read_csv(os.path.join(DATA_DIR, 'supports.csv'), encoding='cp949')
+
+
+# AI 상담이 근거로 쓸 법률 조문 목록 (supports.csv 와 같은 방식)
+@st.cache_data
+def load_laws():
+    return pd.read_csv(os.path.join(DATA_DIR, 'laws.csv'), encoding='cp949')
 
 
 @st.cache_data
@@ -99,41 +120,89 @@ def add_grade(df):
     return df, unit
 
 
-def seoul_table(crime_type):
-    """서울 자치구별 건수 표"""
-    crime, _ = load_crime()
+# 연도별 파일 형식이 달라서 지역 이름을 읽는 방법을 맞춰 준다.
+#   2024~2025년 : '서울 종로구', '경기도 수원시'   (띄어쓰기 있음, 서울 구별 자료 있음)
+#   2023년      : '서울종로구', '경기도수원시'     (띄어쓰기 없음, 서울 구별 자료 있음)
+#   2018~2022년 : '서울', '부산', '세종', '경기 수원' (서울은 구별 자료 없이 합계만, 도는 일부 시만 있음)
+METRO = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종시']   # 특별시·광역시·세종
+
+
+def sido_name(col):
+    """지역 컬럼 이름 → sido.csv 의 시도 이름. 시도를 정할 수 없으면 None"""
+    _, sido_info = load_population()
+    if col == '세종':                 # 2018~2022년 파일은 '세종시' 가 아니라 '세종'
+        return '세종시'
+    # [수업 외] startswith : 글자가 ~로 시작하는지 확인. 띄어쓰기가 있든 없든 앞부분으로 시도를 찾는다.
+    for name in sido_info['시도']:
+        if col.startswith(name):
+            return name
+    return None   # 예: 2018~2022년의 '경기 수원'(도 이름이 '경기' 라 안 맞음), '기타도시'
+
+
+def has_gu_detail(year):
+    """그 해 파일에 서울 자치구별 자료가 있는지 (2023년부터 있음)"""
+    crime, _ = load_crime(year)
+    return '서울' not in crime.columns
+
+
+def seoul_table(crime_type, year=2025):
+    """서울 자치구별 건수 표 (2023년 이후 파일만 가능)"""
+    crime, _ = load_crime(year)
     data = filter_type(crime, crime_type)
 
-    seoul_cols = [c for c in data.columns if c.startswith('서울')]   # [수업 외] 위 region_columns 설명 참고
+    # [수업 외] 리스트 컴프리헨션 : '서울' 로 시작하는 컬럼만 고른다 (region_columns 설명 참고)
+    seoul_cols = [c for c in data.columns if c.startswith('서울')]
 
     # [수업 외] sum() 의 결과(시리즈)를 reset_index() 로 표(데이터프레임)로 바꾼다.
     #   세로 방향 합계 → '서울 종로구: 123' 형태 → 컬럼 두 개(지역, 건수)짜리 표
     seoul = data[seoul_cols].sum().reset_index()
     seoul.columns = ['지역', '건수']
-    # [수업 외] .str.replace : 글자 바꾸기. '서울 종로구' → '종로구' (지도 파일의 이름과 맞추기 위함)
-    seoul['구'] = seoul['지역'].str.replace('서울 ', '')
+    # [수업 외] .str.replace : '서울 종로구'/'서울종로구' → '종로구' (지도 파일의 이름과 맞추기 위함)
+    #   .str.strip() : 앞뒤 공백 제거
+    seoul['구'] = seoul['지역'].str.replace('서울', '', n=1).str.strip()
 
     gu, _ = load_population()
     seoul = pd.merge(seoul, gu, on='구')   # [수업 6장] pd.merge 로 인구 합치기
     return add_grade(seoul)
 
 
-def sido_table(crime_type):
-    """전국 시도별 건수 표"""
-    crime, _ = load_crime()
+def sido_table(crime_type, year=2025):
+    """전국 시도별 건수 표. 2018~2022년은 특별시·광역시·세종만 정확히 계산할 수 있다."""
+    crime, _ = load_crime(year)
     data = filter_type(crime, crime_type)
 
     total = data[region_columns(data)].sum().reset_index()
     total.columns = ['지역', '건수']
-    # [수업 외] split() : 띄어쓰기로 글자를 나눈다. '경기도 수원시'.split() → ['경기도', '수원시']
-    #   [0] 으로 첫 단어(시도 이름)만 가져온다.
-    total['시도'] = [x.split()[0] for x in total['지역']]
+    total['시도'] = [sido_name(x) for x in total['지역']]
+
+    # 2018~2022년 파일은 도 지역이 '경기 수원' 같은 일부 시만 있고 군 지역은 '도시이외' 로 묶여 있어
+    # 도별 합계를 낼 수 없다. 그래서 특별시·광역시·세종만 남긴다. (지도에서 도는 회색)
+    if not has_gu_detail(year):
+        total = total[total['시도'].isin(METRO)]   # [수업 5장] isin
 
     # [수업 6장] groupby + agg 로 시도별 합계
     sido = total.groupby('시도', as_index=False).agg(건수=('건수', 'sum'))
     _, sido_info = load_population()
     sido = pd.merge(sido, sido_info, on='시도')
     return add_grade(sido)
+
+
+def yearly_trend(crime_type):
+    """연도별 전국 합계와 특별시·광역시별 건수 (모든 연도 파일에서 같은 기준으로 셀 수 있는 것만)"""
+    rows = []
+    for year in crime_years():
+        crime, _ = load_crime(year)
+        data = filter_type(crime, crime_type)
+        cols = region_columns(data)
+        rows.append({'연도': year, '지역': '전국', '건수': data[cols].sum().sum()})
+        for col in cols:
+            name = sido_name(col)
+            if name in METRO:
+                rows.append({'연도': year, '지역': name, '건수': data[col].sum()})
+    trend = pd.DataFrame(rows)
+    # 2023년 이후 파일은 한 시가 여러 구로 나뉘어 있으므로 시별로 다시 더한다.
+    trend = trend.groupby(['연도', '지역'], as_index=False).agg(건수=('건수', 'sum'))
+    return trend
 
 
 # ---------------------------------------------------------------------
