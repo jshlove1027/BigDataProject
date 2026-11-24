@@ -5,13 +5,12 @@
 
 import streamlit as st
 import plotly.express as px   # [수업 12장]
-from common import load_crime, filter_type, region_columns, crime_years, yearly_trend
+from common import load_crime, filter_type, region_columns, crime_years, yearly_trend, page_setup, section, footer
 
-st.set_page_config(page_title='범죄 통계', layout='wide')
-st.title('범죄 통계 (전국)')
+page_setup('범죄 통계', '전국에서 많이 일어나는 범죄와 장소, 2018년부터의 변화를 보여 드립니다.')
 
 # [수업 외] st.columns(2) 로 선택 메뉴 두 개를 가로로 나란히 놓는다.
-c1, c2 = st.columns(2)
+c1, c2 = st.container(border=True).columns(2)
 with c1:
     year = st.selectbox('연도', crime_years(), format_func=lambda y: f'{y}년')
 crime, place = load_crime(year)
@@ -24,7 +23,7 @@ place_data = filter_type(place, crime_type)
 left, right = st.columns(2)
 
 with left:
-    st.subheader(f'{year}년 많이 일어난 범죄 TOP 10')
+    section(f'{year}년 많이 일어난 범죄 TOP 10')
     type_sum = data.copy()
     # [수업 외] sum(axis=1) : 가로 방향 합계. 한 범죄의 모든 지역 건수를 더해 '전국' 컬럼을 만든다.
     #   (수업에서 쓴 sum() 은 세로 방향 합계 = axis=0)
@@ -37,7 +36,7 @@ with left:
     st.plotly_chart(fig, use_container_width=True)
 
 with right:
-    st.subheader('범죄가 많이 일어난 장소 TOP 10 (2025년)')
+    section('범죄가 많이 일어난 장소 TOP 10 (2025년)')
     if year != 2025:
         st.caption('장소별 통계는 2025년 파일만 있어서 2025년 기준으로 보여 줍니다.')
     place_sum = place_data[place_data.columns[2:]].sum().reset_index()   # [수업 외] reset_index: common.py 설명 참고
@@ -56,13 +55,14 @@ with st.expander('표로 보기'):
 # ---------------------------------------------------------------------
 # 연도별 추이 : data 폴더의 모든 연도 CSV 를 합쳐서 그린다
 # ---------------------------------------------------------------------
-st.subheader(f'연도별 추이 ({crime_type})')
+section(f'연도별 추이 ({crime_type})')
 trend = yearly_trend(crime_type)
 
 left2, right2 = st.columns(2)
 with left2:
     # [수업 12장] px.line : 꺾은선 그래프 (markers=True : 점 표시)
-    fig = px.line(data_frame=trend[trend['지역'] == '전국'], x='연도', y='건수', markers=True, title='전국')
+    fig = px.line(data_frame=trend[trend['지역'] == '전국'], x='연도', y='건수', markers=True, title='전국',
+                  color_discrete_sequence=['#1F5FBF'])
     fig.update_xaxes(dtick=1)   # [수업 외] x축 눈금을 1년 간격으로
     st.plotly_chart(fig, use_container_width=True)
 with right2:
@@ -72,3 +72,5 @@ with right2:
     st.plotly_chart(fig, use_container_width=True)
 st.caption('도(경기·강원 등)는 2018~2022년 파일에서 도별 합계를 낼 수 없어 추이에서 뺐습니다. '
            '범죄 종류는 대분류 기준이며, 경찰청 통계는 해마다 세부 분류가 조금씩 바뀔 수 있습니다.')
+
+footer()
