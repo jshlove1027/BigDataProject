@@ -6,7 +6,7 @@
 
 import os
 import streamlit as st
-from common import load_supports, load_laws, page_setup, footer
+from common import load_supports, load_laws, page_setup, footer, get_openai_key, explain_openai_error
 
 page_setup('AI 상담', '겪은 일을 적어 주시면 법률 조문을 근거로 어떤 피해에 해당할 수 있는지, 어떤 지원을 받을 수 있는지 안내해 드립니다.')
 
@@ -14,12 +14,17 @@ MODEL = 'gpt-5.6-luna'   # [수업 10주차] 수업에서 사용한 모델. 사�
 
 st.warning('입력한 내용은 외부 AI 서비스(OpenAI)로 전송됩니다. 이름·주소·전화번호 같은 개인정보는 쓰지 마세요.')
 
-# [수업 10주차] API 키는 환경변수 OPENAI_API_KEY 에서 읽는다. (코드나 GitHub 에 키를 쓰지 않기)
-# [수업 외] os.environ.get : 환경변수가 없으면 오류 대신 None 을 돌려준다 (수업의 os.environ[...] 는 없으면 오류)
-if os.environ.get('OPENAI_API_KEY') is None:
-    st.info('AI 상담을 쓰려면 환경변수 OPENAI_API_KEY 를 설정한 뒤 사이트를 다시 실행하세요. (README 참고)')
+# [수업 10주차] API 키는 코드에 쓰지 않는다. common.py 의 get_openai_key 가
+#   환경변수 → secrets.toml → .env 파일 → 아래 입력칸 순서로 키를 찾는다.
+api_key, key_from = get_openai_key()
+if api_key is None:
+    st.info('AI 상담을 쓰려면 OpenAI API 키가 필요합니다. 아래에 키를 붙여 넣거나, '
+            're-main 폴더에 .env 파일을 만들고 OPENAI_API_KEY=sk-... 한 줄을 적은 뒤 새로고침하세요. (README 참고)')
+    # [수업 외] type='password' : 입력한 글자가 ●●● 로 가려진다. 이 키는 이번 접속 동안만 쓰고 파일에 저장하지 않는다.
+    st.text_input('OpenAI API 키', type='password', key='api_key_input', placeholder='sk-...')
     footer()
     st.stop()
+st.caption(f'API 키 확인됨 ({key_from}) · 모델 {MODEL}')
 
 # [수업 외] st.text_area : 여러 줄 입력칸 / st.button : 누르면 True
 # 홈 화면 입력칸에 적고 왔다면 그 글을 미리 넣어 둔다 (st.session_state 설명은 홈.py 참고)
@@ -78,7 +83,7 @@ if st.button('안내 받기', type='primary'):
 
     # [수업 10주차] OpenAI 객체를 만들고 질문 보내기
     from openai import OpenAI
-    client = OpenAI()
+    client = OpenAI(api_key=api_key)   # 찾은 키를 직접 넘긴다
 
     # [수업 외] st.spinner : 기다리는 동안 '안내를 만드는 중' 표시
     with st.spinner('안내를 만드는 중입니다...'):
@@ -87,7 +92,10 @@ if st.button('안내 받기', type='primary'):
             response = client.responses.create(model=MODEL, input=prompt)
             st.markdown(response.output_text)   # [수업 외] st.markdown : 굵게·목록 같은 서식을 살려 표시
         except Exception as e:
-            st.error(f'AI 응답을 받지 못했습니다: {type(e).__name__} {e}')
+            # 오류 종류에 따라 무엇을 고치면 되는지 알려 준다 (common.py 의 explain_openai_error)
+            st.error('AI 응답을 받지 못했습니다. ' + explain_openai_error(e))
+            with st.expander('자세한 오류 내용'):
+                st.code(f'{type(e).__name__}: {e}')
 
     # [수업 외] st.expander : 눌러야 펼쳐지는 상자. AI 가 참고한 법률 목록을 사용자도 직접 볼 수 있게 한다.
     with st.expander('AI 가 근거로 참고한 법률 조문 목록 보기'):

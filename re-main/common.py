@@ -301,6 +301,84 @@ SITUATIONS = {
     '크게 다쳤거나 가족을 잃었어요': ['범죄피해구조금', '범죄피해자지원센터', '스마일센터'],
 }
 
+# ---------------------------------------------------------------------
+# OpenAI API 키 찾기
+#   키를 어디에 넣었든 찾을 수 있게 아래 순서로 확인한다. (키는 절대 코드나 GitHub 에 쓰지 않기)
+#   1) 환경변수 OPENAI_API_KEY            (수업 방식)
+#   2) .streamlit/secrets.toml 또는 Streamlit Cloud 의 Secrets
+#   3) re-main 폴더나 저장소 맨 위 폴더의 .env 파일 (OPENAI_API_KEY=sk-... 한 줄)
+#   4) AI 상담 페이지에서 직접 입력한 키 (이번 접속에만 쓰고 저장하지 않음)
+# ---------------------------------------------------------------------
+def clean_key(value):
+    # [수업 외] 복사할 때 따라 들어온 앞뒤 공백·따옴표를 지운다 ("sk-..." → sk-...)
+    if value is None:
+        return None
+    value = str(value).strip().strip('"').strip("'").strip()
+    return value if value != '' else None
+
+
+def read_env_file():
+    # [수업 외] .env 파일을 한 줄씩 읽어 OPENAI_API_KEY= 로 시작하는 줄을 찾는다 (추가 설치 없이)
+    for folder in [BASE_DIR, os.path.dirname(BASE_DIR)]:
+        path = os.path.join(folder, '.env')
+        if os.path.exists(path):
+            with open(path, encoding='utf-8-sig') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('export '):
+                        line = line[len('export '):]
+                    if line.startswith('OPENAI_API_KEY'):
+                        return clean_key(line.split('=', 1)[1]) if '=' in line else None
+    return None
+
+
+def get_openai_key():
+    """(키, 찾은 곳) 을 돌려준다. 못 찾으면 (None, None)"""
+    key = clean_key(os.environ.get('OPENAI_API_KEY'))
+    if key:
+        return key, '환경변수'
+    # [수업 외] st.secrets : secrets.toml 이 없으면 읽을 때 오류가 나므로 try 로 감싼다
+    try:
+        key = clean_key(st.secrets.get('OPENAI_API_KEY'))
+        if key:
+            return key, 'secrets.toml'
+    except Exception:
+        pass
+    key = read_env_file()
+    if key:
+        return key, '.env 파일'
+    # [수업 외] 입력칸(위젯) 값은 그 입력칸이 화면에서 사라지면 streamlit 이 지운다.
+    #   그래서 입력된 키를 위젯이 아닌 다른 이름(api_key_saved)으로 옮겨 두고 그것을 쓴다.
+    typed = clean_key(st.session_state.get('api_key_input'))
+    if typed:
+        st.session_state['api_key_saved'] = typed
+    key = st.session_state.get('api_key_saved')
+    if key:
+        return key, '직접 입력'
+    return None, None
+
+
+def explain_openai_error(e):
+    """OpenAI 오류를 무엇을 고치면 되는지 알 수 있는 한국어 문장으로 바꾼다"""
+    name = type(e).__name__
+    text = str(e)
+    if name == 'AuthenticationError':
+        return 'API 키가 틀렸거나 삭제된 키입니다. platform.openai.com 의 API keys 에서 새 키를 만들어 다시 넣어 주세요.'
+    if name == 'RateLimitError' and 'insufficient_quota' in text:
+        return '키는 맞지만 OpenAI 계정에 사용할 수 있는 크레딧이 없습니다. platform.openai.com 의 Billing 에서 결제 수단을 등록하거나 크레딧을 충전해 주세요.'
+    if name == 'RateLimitError':
+        return '짧은 시간에 요청이 너무 많았습니다. 잠시 뒤 다시 눌러 주세요.'
+    if name in ('NotFoundError', 'PermissionDeniedError'):
+        return '이 계정에서 지금 모델을 쓸 수 없습니다. pages/4_AI_상담.py 의 MODEL 을 계정에서 쓸 수 있는 모델로 바꿔 보세요.'
+    if name in ('APIConnectionError', 'APITimeoutError'):
+        return 'OpenAI 서버에 연결하지 못했습니다. 인터넷 연결이나 학교·회사 방화벽을 확인해 주세요.'
+    if name == 'BadRequestError':
+        return '요청 형식에 문제가 있습니다. pip install --upgrade openai 로 openai 패키지를 최신으로 바꿔 보세요.'
+    if name == 'AttributeError' and 'responses' in text:
+        return 'openai 패키지가 오래된 버전입니다. 터미널에서 pip install --upgrade openai 를 실행한 뒤 사이트를 다시 실행하세요.'
+    return '알 수 없는 오류입니다. 아래 자세한 내용을 확인해 주세요.'
+
+
 # 상황 → 관련 법률 (data/laws.csv 의 '피해유형' 과 똑같이 써야 한다)
 SITUATION_LAWS = {
     '폭행·상해를 당했어요': ['폭행', '폭행·상해', '협박'],
