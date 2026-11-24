@@ -15,15 +15,20 @@ page_setup('내 상황 찾기', '해당하는 상황을 모두 체크하세요. 
 # 홈에서 '상황별로 바로 찾기' 버튼을 누르고 왔다면 그 상황을 미리 체크해 둔다.
 # [수업 외] st.session_state.pop(이름, 기본값) : 저장된 값을 꺼내면서 지운다 (한 번만 쓰고 없앰)
 preselect = st.session_state.pop('preselect', None)
+# [수업 외] 체크박스마다 key 를 붙이면 체크 상태가 st.session_state['chk_상황이름'] 에 저장된다.
+#   체크박스를 만들기 전에 미리 True 로 넣어 두면, 다른 항목을 체크해 페이지가 다시 실행돼도 체크가 풀리지 않는다.
+#   (value= 로 처음 상태를 주면 다시 실행될 때 값이 바뀌어 체크가 풀리는 문제가 있었다)
+if preselect is not None:
+    st.session_state[f'chk_{preselect}'] = True
 
-# [수업 외] st.checkbox(글자, value=처음 상태) : 체크하면 True, 아니면 False 를 돌려준다.
+# [수업 외] st.checkbox(글자, key=이름) : 체크하면 True, 아니면 False 를 돌려준다.
 #   상황 8개를 2칸으로 나눠 배치하고, 체크된 것만 checked 리스트에 모은다.
 checked = []
 with st.container(border=True):
     cols = st.columns(2)
     for i, s in enumerate(SITUATIONS):   # [수업 외] enumerate : 순서 번호(i)와 값을 같이 꺼낸다
         with cols[i % 2]:
-            if st.checkbox(s, value=(s == preselect)):
+            if st.checkbox(s, key=f'chk_{s}'):
                 checked.append(s)
 
 if len(checked) == 0:
