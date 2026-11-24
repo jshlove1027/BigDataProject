@@ -41,7 +41,12 @@ streamlit run 홈.py
 1. `pip install -r requirements.txt`
 2. `data/seoul_gu.csv`, `data/sido.csv` 의 인구 칸 입력 (행정안전부 주민등록 인구통계, 2025년 12월 기준). 비우면 '발생 건수' 지도로 표시됩니다.
    (엑셀 저장 시 일반 'CSV' 형식 유지)
-3. AI 안내 부분은 환경변수 `OPENAI_API_KEY` 필요 (키를 코드나 저장소에 올리지 마세요)
+3. AI 상담에는 OpenAI API 키가 필요합니다. 아래 중 **하나만** 하면 됩니다. (키를 코드나 GitHub 에 올리지 마세요)
+   - **가장 쉬운 방법**: `re-main` 폴더에 `.env` 파일을 만들고 `OPENAI_API_KEY=sk-...` 한 줄 저장 (`.gitignore` 에 있어 GitHub 에 안 올라감)
+   - 환경변수: Windows PowerShell `$env:OPENAI_API_KEY="sk-..."` / 명령 프롬프트 `set OPENAI_API_KEY=sk-...` 를 **streamlit 을 실행할 그 터미널**에서 입력한 뒤 `streamlit run 홈.py`
+   - Streamlit Cloud: 앱 설정 → Secrets 에 `OPENAI_API_KEY = "sk-..."`
+   - 발표 현장용: AI 상담 페이지에 키를 직접 붙여 넣기 (저장되지 않음)
+   - 키가 틀렸거나, 크레딧이 없거나, 모델 권한이 없으면 페이지에 이유가 한국어로 표시됩니다.
 4. 노트북 실행. 지도 경계 파일은 처음 실행할 때 GitHub(southkorea-maps)에서 자동으로 내려받아 `data/seoul_geo.json`, `data/sido_geo.json` 으로 저장됩니다.
    - 내려받기에 실패하면: GitHub `southkorea/seoul-maps` → `kostat/2013/json` → `seoul_municipalities_geo_simple.json` 을 열고 Raw 내용을 `data/seoul_geo.json` 으로 저장, 시도는 `southkorea/southkorea-maps` → `kostat/2013/json` → `skorea_provinces_geo_simple.json` 을 `data/sido_geo.json` 으로 저장
    - 경계 파일 이름이 통계와 안 맞으면 노트북이 '지도에 없는 구/시도'를 출력합니다.
