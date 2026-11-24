@@ -11,27 +11,30 @@ import plotly.express as px   # [수업 12장]
 from streamlit_folium import st_folium
 
 from common import (load_crime, seoul_table, sido_table, load_geo, make_choropleth,
-                    crime_years, has_gu_detail, SEOUL_GEO_URL, SIDO_GEO_URL)
+                    crime_years, has_gu_detail, page_setup, footer, SEOUL_GEO_URL, SIDO_GEO_URL)
 
-st.set_page_config(page_title='범죄 지도', layout='wide')
-st.title('범죄 지도')
+page_setup('범죄 지도', '연도와 범죄 종류를 고르면 지역별 범죄율(인구 10만 명당 발생 건수)을 색으로 보여 드립니다.')
 
 # [수업 외] st.selectbox : data 폴더에 있는 연도 CSV 목록 중 하나를 고른다. (최신 연도가 기본값)
-year = st.selectbox('연도', crime_years(), format_func=lambda y: f'{y}년')
+# [수업 외] 선택 메뉴 세 개를 테두리 상자 안에 가로로 나란히 놓는다 (st.columns 3칸)
+box = st.container(border=True)
+f1, f2, f3 = box.columns([1, 1.4, 1.4])
+year = f1.selectbox('연도', crime_years(), format_func=lambda y: f'{y}년')
 crime, _ = load_crime(year)
 
 # [수업 외] 선택 메뉴
 #   st.radio     : 여러 개 중 하나를 고르는 동그란 버튼 (horizontal=True: 가로로 나열)
 #   st.selectbox : 펼쳐서 고르는 목록
 #   고른 값이 변수에 들어가고, 바꿀 때마다 아래 지도가 다시 그려진다.
-area = st.radio('지역', ['서울 자치구', '전국 시도'], horizontal=True)
+area = f2.radio('지역', ['서울 자치구', '전국 시도'], horizontal=True)
 # [수업 8장] unique() : 겹치지 않는 값 목록 → 앞에 '전체' 를 붙여 선택지로 사용
 types = ['전체'] + list(crime['범죄대분류'].unique())
-crime_type = st.selectbox('범죄 종류', types)
+crime_type = f3.selectbox('범죄 종류', types)
 
 # 2018~2022년 경찰청 파일에는 서울 자치구별 자료가 없다 (서울 합계만 있음)
 if area == '서울 자치구' and not has_gu_detail(year):
     st.warning(f'{year}년 경찰청 자료에는 서울 자치구별 통계가 없습니다. 2023년 이후를 고르거나 "전국 시도" 를 보세요.')
+    footer()
     st.stop()   # [수업 외] 여기서 페이지 그리기를 멈춘다
 
 if area == '서울 자치구':
@@ -69,3 +72,5 @@ with right:
     st.plotly_chart(fig, use_container_width=True)
 
 st.caption('색이 진할수록 범죄가 많은 지역입니다. 지역에 마우스를 올리면 값이 보입니다. 통계는 범죄가 "발생한 장소" 기준입니다. 유동인구가 많은 곳(서울 중구·종로구 등)은 높게 나올 수 있습니다.')
+
+footer()

@@ -288,10 +288,150 @@ def make_choropleth(geo, df, key_col, legend, center, zoom):
     return m
 
 
+# 상황 → 안내할 제도명 목록 (제도명은 data/supports.csv 의 '제도명' 과 똑같이 써야 한다)
+# [수업 외] 딕셔너리 { 키: 값 } 에 리스트를 값으로 넣은 형태
+SITUATIONS = {
+    '폭행·상해를 당했어요': ['범죄피해자지원센터', '스마일센터', '대한법률구조공단'],
+    '성범죄 피해를 입었어요': ['여성긴급전화 1366', '해바라기센터', '스마일센터', '범죄피해자지원센터'],
+    '가정폭력을 겪고 있어요': ['여성긴급전화 1366', '해바라기센터', '범죄피해자지원센터'],
+    '불법촬영·유포(협박)를 당했어요': ['디지털성범죄피해자지원센터', '여성긴급전화 1366'],
+    '누군가 계속 따라오거나 연락해요(스토킹)': ['스토킹 피해자 보호 조치', '여성긴급전화 1366'],
+    '보이스피싱·사기를 당했어요': ['보이스피싱 지급정지·피해구제', '대한법률구조공단', '범죄피해자지원센터'],
+    '물건을 도난당했어요': ['범죄피해자지원센터', '대한법률구조공단'],
+    '크게 다쳤거나 가족을 잃었어요': ['범죄피해구조금', '범죄피해자지원센터', '스마일센터'],
+}
+
+# 상황 → 관련 법률 (data/laws.csv 의 '피해유형' 과 똑같이 써야 한다)
+SITUATION_LAWS = {
+    '폭행·상해를 당했어요': ['폭행', '폭행·상해', '협박'],
+    '성범죄 피해를 입었어요': ['성범죄'],
+    '가정폭력을 겪고 있어요': ['가정폭력', '폭행', '폭행·상해'],
+    '불법촬영·유포(협박)를 당했어요': ['불법촬영·유포'],
+    '누군가 계속 따라오거나 연락해요(스토킹)': ['스토킹'],
+    '보이스피싱·사기를 당했어요': ['보이스피싱·사기'],
+    '물건을 도난당했어요': ['절도'],
+    '크게 다쳤거나 가족을 잃었어요': ['중상해·사망', '폭행·상해'],
+}
+
+
 # ---------------------------------------------------------------------
-# 3. 화면 공통 꾸미기
+# 3. 화면 공통 꾸미기 (복지로 사이트처럼: 흰 바탕, 파란 강조색, 카드형 메뉴, 큰 글씨)
 # ---------------------------------------------------------------------
 
+# [수업 외] CSS : 웹페이지의 색·글꼴·여백을 정하는 언어.
+#   st.markdown(..., unsafe_allow_html=True) 로 <style> 을 넣으면 streamlit 기본 모양을 바꿀 수 있다.
+#   아래 .gil-xxx 처럼 이름을 붙인 상자들은 이 파일의 함수들이 만드는 HTML 에서 쓴다.
+CSS = """
+<style>
+html, body, [class*="css"], .stMarkdown, button, input, textarea {
+  font-family: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+}
+.block-container { padding-top: 3.6rem !important; max-width: 1180px; }
+/* 휴대폰처럼 좁은 화면에서는 글씨를 조금 줄인다 */
+@media (max-width: 640px) {
+  .gil-hero { padding:20px 18px 10px; } .gil-hero h1 { font-size:1.45rem !important; }
+  .gil-top .brand small { display:none; } .gil-head h1 { font-size:1.4rem; }
+}
+h1, h2, h3 { color: #13294B; letter-spacing: -0.02em; }
+
+/* 맨 위 남색 띠 : 사이트 이름과 긴급 연락처 */
+.gil-top { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
+  background:#13294B; color:#fff; border-radius:12px; padding:12px 20px; margin-bottom:18px; }
+.gil-top .brand { font-weight:800; font-size:1.15rem; }
+.gil-top .brand small { font-weight:400; opacity:.75; margin-left:8px; font-size:.85rem; }
+.gil-top .sos a { color:#fff; text-decoration:none; background:#D93A3A; border-radius:999px;
+  padding:4px 12px; margin-left:6px; font-weight:700; font-size:.9rem; white-space:nowrap; }
+.gil-top .sos a.sub { background:rgba(255,255,255,.16); font-weight:600; }
+
+/* 첫 화면 큰 안내 상자 */
+.gil-hero { background:#EAF2FD; border-radius:16px; padding:30px 32px 14px; margin-bottom:6px; }
+.gil-hero h1 { font-size:2.0rem; margin:0 0 6px; padding:0; }
+.gil-hero p { font-size:1.08rem; color:#3A4A60; margin:0; }
+
+/* 페이지 제목 + 위치 표시(홈 > 메뉴) */
+.gil-crumb { color:#6B7A90; font-size:.9rem; margin-bottom:2px; }
+.gil-head { border-bottom:2px solid #1F5FBF; padding-bottom:10px; margin-bottom:18px; }
+.gil-head h1 { font-size:1.75rem; margin:0; padding:0; }
+.gil-head p { color:#4A5A70; margin:6px 0 0; font-size:1.02rem; }
+
+/* 섹션 제목 (왼쪽 파란 막대) */
+.gil-sec { border-left:5px solid #1F5FBF; padding-left:10px; font-size:1.25rem; font-weight:800;
+  color:#13294B; margin:26px 0 12px; }
+
+/* 지원제도 카드 */
+.gil-card { border:1px solid #D9E3F0; border-radius:14px; padding:18px 20px; background:#fff;
+  box-shadow:0 1px 3px rgba(19,41,75,.06); margin-bottom:12px; }
+.gil-card h4 { margin:0 0 6px; color:#13294B; font-size:1.12rem; }
+.gil-card p { margin:4px 0; color:#334155; }
+.gil-card .tel { font-weight:700; color:#1F5FBF; font-size:1.05rem; }
+.gil-tag { display:inline-block; background:#EAF2FD; color:#1F5FBF; border-radius:999px;
+  padding:2px 10px; font-size:.82rem; font-weight:600; margin:2px 4px 2px 0; }
+.gil-tag.warn { background:#FFF4E0; color:#A15C00; }
+.gil-tag.ok { background:#E6F6EC; color:#1E7A43; }
+
+/* 숫자 요약 상자 */
+.gil-stat { background:#F2F6FB; border-radius:12px; padding:14px 16px; text-align:center; }
+.gil-stat b { display:block; font-size:1.5rem; color:#1F5FBF; }
+.gil-stat span { color:#4A5A70; font-size:.9rem; }
+
+/* 맨 아래 안내 */
+.gil-foot { background:#F5F7FA; border-radius:12px; padding:16px 20px; color:#5B6B80; font-size:.88rem;
+  margin-top:36px; line-height:1.7; }
+
+/* streamlit 기본 요소 손보기 : 테두리 상자를 카드처럼, 메뉴 링크 글씨 크게 */
+div[data-testid="stVerticalBlockBorderWrapper"] { border-radius:14px; }
+a[data-testid="stPageLink-NavLink"] p { font-size:1.08rem; font-weight:700; color:#13294B; }
+section[data-testid="stSidebar"] { background:#F2F6FB; }
+.stButton button p { white-space: normal; line-height:1.35; }
+.stButton button[kind="primary"] { border-radius:10px; font-weight:700; padding:.55rem 1.4rem; }
+</style>
+"""
+
+
+def page_setup(title, desc=None, crumb=True):
+    """모든 페이지 맨 위 공통 : 스타일 적용 + 남색 띠(긴급 연락처) + 페이지 제목"""
+    # [수업 외] st.set_page_config : 브라우저 탭 제목과 화면 폭. 페이지 맨 처음에 한 번만 쓴다.
+    st.set_page_config(page_title=f'{title} | 범죄피해 지원 길잡이', layout='wide')
+    st.markdown(CSS, unsafe_allow_html=True)
+    # [수업 외] <a href="tel:112"> : 휴대폰에서 누르면 바로 전화가 걸리는 링크
+    st.markdown(
+        '<div class="gil-top"><div class="brand">범죄피해 지원 길잡이<small>피해 확인 · 지원제도 · 범죄 통계</small></div>'
+        '<div class="sos">지금 위험하다면 <a href="tel:112">112</a>'
+        '<a class="sub" href="tel:1366">여성긴급전화 1366</a>'
+        '<a class="sub" href="tel:1577-1295">피해자지원센터 1577-1295</a></div></div>',
+        unsafe_allow_html=True)
+    if crumb:
+        st.markdown(f'<div class="gil-crumb">홈 &gt; {title}</div>', unsafe_allow_html=True)
+        head = f'<div class="gil-head"><h1>{title}</h1>'
+        if desc:
+            head += f'<p>{desc}</p>'
+        st.markdown(head + '</div>', unsafe_allow_html=True)
+
+
+def section(text):
+    """왼쪽에 파란 막대가 있는 섹션 제목"""
+    st.markdown(f'<div class="gil-sec">{text}</div>', unsafe_allow_html=True)
+
+
+def support_card(row):
+    """지원제도 한 줄(row)을 카드로 보여 준다"""
+    ok = str(row['확인상태']).startswith('확인됨')
+    status = f'<span class="gil-tag ok">{row["확인상태"]}</span>' if ok else '<span class="gil-tag warn">내용 재확인 필요</span>'
+    st.markdown(
+        f'<div class="gil-card"><h4>{row["제도명"]}</h4>'
+        f'<span class="gil-tag">{row["대상피해"]}</span>{status}'
+        f'<p>{row["하는일"]}</p>'
+        f'<p>연락처 <span class="tel">{row["연락처"]}</span></p></div>',
+        unsafe_allow_html=True)
+
+
+def footer(extra=''):
+    st.markdown(
+        '<div class="gil-foot">이 사이트는 참고용 안내이며 법률 자문이 아닙니다. 정확한 판단은 대한법률구조공단(132) 또는 변호사에게 문의하세요.<br>'
+        '자료 출처: 경찰청 범죄 발생 지역별·장소별 통계, 행정안전부 주민등록 인구통계(2025.12.), 국가법령정보센터. '
+        + extra + '</div>', unsafe_allow_html=True)
+
+
 def emergency_banner():
-    # [수업 외] st.error : 빨간 상자로 강조된 글. 위급 상황 안내를 항상 맨 위에 보여 준다.
-    st.error('**지금 위험하다면 바로 112** · 여성긴급전화 **1366** · 범죄피해자지원센터 **1577-1295**')
+    # 예전 페이지와의 호환용. 지금은 page_setup 의 남색 띠에 긴급 연락처가 들어 있다.
+    pass

@@ -1,0 +1,10 @@
+# [수업 외] streamlit 화면 색 설정 (복지로처럼 흰 바탕 + 파란색 강조)
+[theme]
+base = "light"
+primaryColor = "#1F5FBF"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F6FB"
+textColor = "#1E2A3A"
+
+[client]
+toolbarMode = "minimal"
